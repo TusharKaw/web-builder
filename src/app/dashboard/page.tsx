@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Plus, Globe, FileText, TrendingUp } from 'lucide-react'
+import { getBaseDomain } from '@/lib/config'
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -123,7 +124,7 @@ export default async function DashboardPage() {
                 <div className="space-y-2 text-sm text-gray-600 mb-4">
                   <div className="flex items-center">
                     <Globe className="w-4 h-4 mr-2" />
-                    <span>{site.subdomain}.xfanstube.com</span>
+                    <span>{site.subdomain}.{getBaseDomain()}</span>
                   </div>
                   <div className="flex items-center">
                     <FileText className="w-4 h-4 mr-2" />

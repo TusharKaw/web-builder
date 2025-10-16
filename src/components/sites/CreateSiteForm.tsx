@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Globe, Loader2 } from 'lucide-react'
+import { getBaseDomain } from '@/lib/config'
 
 export default function CreateSiteForm() {
   const [formData, setFormData] = useState({
@@ -91,7 +92,7 @@ export default function CreateSiteForm() {
               required
             />
             <span className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 bg-gray-50 text-gray-500 text-sm rounded-r-md">
-              .xfanstube.com
+              .{getBaseDomain()}
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">

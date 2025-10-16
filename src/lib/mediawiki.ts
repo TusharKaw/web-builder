@@ -1,3 +1,5 @@
+import { getWikiApiUrl } from './config'
+
 const MEDIAWIKI_API_URL = process.env.MEDIAWIKI_API_URL || 'http://13.233.126.84/api.php'
 
 export interface MediaWikiPage {
@@ -227,15 +229,136 @@ export async function listPages(wikiUrl?: string): Promise<string[]> {
 }
 
 /**
- * Create a new wiki site (this would typically be handled by your wiki farm)
+ * Create a new wiki site using MediaWiki farm's Special:CreateWiki
  */
-export async function createWikiSite(subdomain: string): Promise<string> {
-  // This is a placeholder - in a real implementation, you'd call your wiki farm's API
-  // to create a new subwiki. For now, we'll return a constructed URL
-  const wikiUrl = `http://${subdomain}.xfanstube.com/api.php`
+export async function createWikiSite(subdomain: string, siteName: string): Promise<string> {
+  const baseApiUrl = process.env.MEDIAWIKI_API_URL || 'http://13.233.126.84/api.php'
   
-  // You might want to make an API call to your wiki farm here
-  // to actually create the subwiki
+  try {
+    // First, get a CSRF token for the createwiki action
+    const tokenResponse = await fetch(`${baseApiUrl}?action=query&format=json&meta=tokens&type=csrf&origin=*`)
+    const tokenData = await tokenResponse.json()
+    const csrfToken = tokenData?.query?.tokens?.csrftoken
+
+    if (!csrfToken) {
+      throw new Error('Failed to get CSRF token for wiki creation')
+    }
+
+    // Call Special:CreateWiki API
+    const createWikiParams = new URLSearchParams({
+      action: 'createwiki',
+      format: 'json',
+      token: csrfToken,
+      wiki: subdomain,
+      language: 'en',
+      private: '0', // Public wiki
+      origin: '*'
+    })
+
+    const createResponse = await fetch(baseApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: createWikiParams
+    })
+
+    const createData = await createResponse.json()
+    
+    if (createData.error) {
+      throw new Error(createData.error.info || 'Failed to create wiki')
+    }
+
+    // Extract the created wiki URL from the response
+    const wikiUrl = createData.createwiki?.url || `${subdomain}.xfanstube.com`
+    const apiUrl = `http://${wikiUrl}/api.php`
+    
+    return apiUrl
+  } catch (error) {
+    console.error('Error creating wiki site:', error)
+    // Fallback to constructed URL if API fails
+    const fallbackUrl = getWikiApiUrl(subdomain)
+    return fallbackUrl
+  }
+}
+
+/**
+ * Manage an existing wiki using MediaWiki farm's Special:ManageWiki
+ */
+export async function manageWikiSite(wikiUrl: string, action: 'delete' | 'suspend' | 'activate'): Promise<boolean> {
+  const baseApiUrl = process.env.MEDIAWIKI_API_URL || 'http://13.233.126.84/api.php'
   
-  return wikiUrl
+  try {
+    // Get CSRF token
+    const tokenResponse = await fetch(`${baseApiUrl}?action=query&format=json&meta=tokens&type=csrf&origin=*`)
+    const tokenData = await tokenResponse.json()
+    const csrfToken = tokenData?.query?.tokens?.csrftoken
+
+    if (!csrfToken) {
+      throw new Error('Failed to get CSRF token for wiki management')
+    }
+
+    // Extract wiki name from URL
+    const wikiName = wikiUrl.replace('http://', '').replace('https://', '').replace('/api.php', '')
+
+    const manageParams = new URLSearchParams({
+      action: 'managewiki',
+      format: 'json',
+      token: csrfToken,
+      wiki: wikiName,
+      action_type: action,
+      origin: '*'
+    })
+
+    const manageResponse = await fetch(baseApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: manageParams
+    })
+
+    const manageData = await manageResponse.json()
+    
+    if (manageData.error) {
+      throw new Error(manageData.error.info || `Failed to ${action} wiki`)
+    }
+
+    return true
+  } catch (error) {
+    console.error(`Error managing wiki (${action}):`, error)
+    return false
+  }
+}
+
+/**
+ * Get wiki information from MediaWiki farm
+ */
+export async function getWikiInfo(wikiUrl: string): Promise<any> {
+  const baseApiUrl = process.env.MEDIAWIKI_API_URL || 'http://13.233.126.84/api.php'
+  
+  try {
+    // Extract wiki name from URL
+    const wikiName = wikiUrl.replace('http://', '').replace('https://', '').replace('/api.php', '')
+
+    const infoParams = new URLSearchParams({
+      action: 'query',
+      format: 'json',
+      list: 'wikis',
+      wkwiki: wikiName,
+      origin: '*'
+    })
+
+    const infoResponse = await fetch(`${baseApiUrl}?${infoParams}`)
+    const infoData = await infoResponse.json()
+    
+    if (infoData.error) {
+      throw new Error(infoData.error.info || 'Failed to get wiki info')
+    }
+
+    return infoData.query?.wikis?.[0] || null
+  } catch (error) {
+    console.error('Error getting wiki info:', error)
+    return null
+  }
 }

@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Subdomain already taken' }, { status: 400 })
     }
 
-    // Create wiki site
-    const wikiUrl = await createWikiSite(subdomain)
+    // Create wiki site using MediaWiki farm
+    const wikiUrl = await createWikiSite(subdomain, name)
 
     // Create site in database
     const site = await prisma.site.create({

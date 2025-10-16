@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { manageWikiSite } from '@/lib/mediawiki'
 
 export async function GET(
   request: NextRequest,
@@ -99,6 +100,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Site not found' }, { status: 404 })
     }
 
+    // Delete the wiki from MediaWiki farm
+    const wikiDeleted = await manageWikiSite(site.wikiUrl, 'delete')
+    
+    if (!wikiDeleted) {
+      console.warn('Failed to delete wiki from MediaWiki farm, but continuing with local deletion')
+    }
+
+    // Mark site as inactive in local database
     await prisma.site.update({
       where: { id },
       data: { isActive: false }

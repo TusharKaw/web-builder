@@ -63,6 +63,31 @@ export default function SitesPage() {
     }
   }
 
+  const handleManageSite = async (siteId: string, action: 'suspend' | 'activate') => {
+    try {
+      const response = await fetch(`/api/sites/${siteId}/manage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} site`)
+      }
+      
+      // Update the site status in the local state
+      setSites(sites.map(site => 
+        site.id === siteId 
+          ? { ...site, isActive: action === 'activate' }
+          : site
+      ))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} site`)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -122,6 +147,7 @@ export default function SitesPage() {
               key={site.id}
               site={site}
               onDelete={handleDeleteSite}
+              onManage={handleManageSite}
             />
           ))}
         </div>

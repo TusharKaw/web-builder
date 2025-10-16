@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Globe, ExternalLink, Settings, Trash2, Eye } from 'lucide-react'
+import { Globe, ExternalLink, Settings, Trash2, Eye, Pause, Play } from 'lucide-react'
+import { getBaseDomain } from '@/lib/config'
 
 interface Site {
   id: string
@@ -23,10 +24,12 @@ interface Site {
 interface SiteCardProps {
   site: Site
   onDelete?: (siteId: string) => void
+  onManage?: (siteId: string, action: 'suspend' | 'activate') => void
 }
 
-export default function SiteCard({ site, onDelete }: SiteCardProps) {
+export default function SiteCard({ site, onDelete, onManage }: SiteCardProps) {
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isManaging, setIsManaging] = useState(false)
 
   const handleDelete = async () => {
     if (!onDelete) return
@@ -41,7 +44,21 @@ export default function SiteCard({ site, onDelete }: SiteCardProps) {
     }
   }
 
-  const siteUrl = site.domain || `${site.subdomain}.xfanstube.com`
+  const handleManage = async (action: 'suspend' | 'activate') => {
+    if (!onManage) return
+    
+    const actionText = action === 'suspend' ? 'suspend' : 'activate'
+    if (confirm(`Are you sure you want to ${actionText} this site?`)) {
+      setIsManaging(true)
+      try {
+        await onManage(site.id, action)
+      } finally {
+        setIsManaging(false)
+      }
+    }
+  }
+
+  const siteUrl = site.domain || `${site.subdomain}.${getBaseDomain()}`
   const publishedPages = site.pages.filter(page => page.isPublished).length
 
   return (
@@ -95,6 +112,30 @@ export default function SiteCard({ site, onDelete }: SiteCardProps) {
           >
             <Settings className="w-4 h-4" />
           </Link>
+          
+          {onManage && (
+            <>
+              {site.isActive ? (
+                <button
+                  onClick={() => handleManage('suspend')}
+                  disabled={isManaging}
+                  className="p-2 text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 rounded-md transition-colors disabled:opacity-50"
+                  title="Suspend site"
+                >
+                  <Pause className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleManage('activate')}
+                  disabled={isManaging}
+                  className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors disabled:opacity-50"
+                  title="Activate site"
+                >
+                  <Play className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
           
           {onDelete && (
             <button

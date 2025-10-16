@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { fetchPage } from '@/lib/mediawiki'
+import { getBaseDomain } from '@/lib/config'
 
 interface PageProps {
   params: {
@@ -69,7 +70,7 @@ export default async function UserHomePage({ params }: PageProps) {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
                 <p className="text-gray-600 mt-1">
-                  {site.domain || `${site.subdomain}.xfanstube.com`}
+                  {site.domain || `${site.subdomain}.${getBaseDomain()}`}
                 </p>
               </div>
               <nav className="flex space-x-6">

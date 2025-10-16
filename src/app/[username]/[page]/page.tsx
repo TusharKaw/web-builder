@@ -4,14 +4,14 @@ import { fetchPage } from '@/lib/mediawiki'
 import { getBaseDomain } from '@/lib/config'
 
 interface PageProps {
-  params: {
+  params: Promise<{
     username: string
     page: string
-  }
+  }>
 }
 
 export default async function UserPage({ params }: PageProps) {
-  const { username, page } = params
+  const { username, page } = await params
 
   // Find the site by subdomain (username)
   const site = await prisma.site.findFirst({
@@ -93,7 +93,7 @@ export default async function UserPage({ params }: PageProps) {
 }
 
 export async function generateMetadata({ params }: PageProps) {
-  const { username, page } = params
+  const { username, page } = await params
 
   const site = await prisma.site.findFirst({
     where: {

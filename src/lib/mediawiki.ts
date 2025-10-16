@@ -332,6 +332,94 @@ export async function manageWikiSite(wikiUrl: string, action: 'delete' | 'suspen
 }
 
 /**
+ * Create a new page in a wiki
+ */
+export async function createPage(title: string, content: string, wikiUrl: string): Promise<boolean> {
+  try {
+    // Get CSRF token
+    const tokenResponse = await fetch(`${wikiUrl}?action=query&format=json&meta=tokens&type=csrf&origin=*`)
+    const tokenData = await tokenResponse.json()
+    const csrfToken = tokenData?.query?.tokens?.csrftoken
+
+    if (!csrfToken) {
+      throw new Error('Failed to get CSRF token for page creation')
+    }
+
+    const createParams = new URLSearchParams()
+    createParams.append('action', 'edit')
+    createParams.append('format', 'json')
+    createParams.append('title', title)
+    createParams.append('text', content)
+    createParams.append('token', csrfToken)
+    createParams.append('origin', '*')
+
+    const response = await fetch(wikiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: createParams.toString(),
+    })
+
+    const data = await response.json()
+
+    if (data.error) {
+      throw new Error(data.error.info || 'Failed to create page')
+    }
+
+    console.log(`Successfully created page: ${title}`)
+    return true
+  } catch (error) {
+    console.error('Error creating page:', error)
+    return false
+  }
+}
+
+/**
+ * Update an existing page in a wiki
+ */
+export async function updatePage(title: string, content: string, wikiUrl: string): Promise<boolean> {
+  try {
+    // Get CSRF token
+    const tokenResponse = await fetch(`${wikiUrl}?action=query&format=json&meta=tokens&type=csrf&origin=*`)
+    const tokenData = await tokenResponse.json()
+    const csrfToken = tokenData?.query?.tokens?.csrftoken
+
+    if (!csrfToken) {
+      throw new Error('Failed to get CSRF token for page update')
+    }
+
+    const updateParams = new URLSearchParams()
+    updateParams.append('action', 'edit')
+    updateParams.append('format', 'json')
+    updateParams.append('title', title)
+    updateParams.append('text', content)
+    updateParams.append('token', csrfToken)
+    updateParams.append('origin', '*')
+
+    const response = await fetch(wikiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: updateParams.toString(),
+    })
+
+    const data = await response.json()
+
+    if (data.error) {
+      throw new Error(data.error.info || 'Failed to update page')
+    }
+
+    console.log(`Successfully updated page: ${title}`)
+    return true
+  } catch (error) {
+    console.error('Error updating page:', error)
+    return false
+  }
+}
+
+/**
  * Get wiki information from MediaWiki farm
  */
 export async function getWikiInfo(wikiUrl: string): Promise<any> {

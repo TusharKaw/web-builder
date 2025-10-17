@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Save, Eye, Code, Palette, Settings, Loader2 } from 'lucide-react'
 
@@ -13,8 +13,10 @@ interface EditPageProps {
 
 export default function EditPage({ params }: EditPageProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { data: session, status } = useSession()
   const [username, setUsername] = useState('')
+  const [pageTitle, setPageTitle] = useState('Home')
   const [htmlContent, setHtmlContent] = useState('')
   const [cssContent, setCssContent] = useState('')
   const [jsContent, setJsContent] = useState('')
@@ -29,9 +31,15 @@ export default function EditPage({ params }: EditPageProps) {
     const loadParams = async () => {
       const resolvedParams = await params
       setUsername(resolvedParams.username)
+      
+      // Check if there's a page query parameter
+      const pageParam = searchParams.get('page')
+      if (pageParam) {
+        setPageTitle(pageParam)
+      }
     }
     loadParams()
-  }, [params])
+  }, [params, searchParams])
 
   useEffect(() => {
     const checkOwner = async () => {
@@ -73,16 +81,16 @@ export default function EditPage({ params }: EditPageProps) {
   const loadExistingContent = async (siteId: string) => {
     setIsLoadingContent(true)
     try {
-      // Try to fetch existing "Home" page content
+      // Try to fetch existing page content
       const response = await fetch(`/api/sites/${siteId}/pages`)
       if (response.ok) {
         const pages = await response.json()
-        const homePage = pages.find((page: any) => page.title === 'Home')
+        const targetPage = pages.find((page: any) => page.title === pageTitle)
         
-        if (homePage && homePage.content) {
+        if (targetPage && targetPage.content) {
           // Parse the existing HTML content
           const parser = new DOMParser()
-          const doc = parser.parseFromString(homePage.content, 'text/html')
+          const doc = parser.parseFromString(targetPage.content, 'text/html')
           
           // Extract HTML content (body content)
           const bodyContent = doc.body.innerHTML
@@ -146,7 +154,7 @@ export default function EditPage({ params }: EditPageProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: 'Home',
+          title: pageTitle,
           content: fullHtml,
           isPublished: true
         })
@@ -157,8 +165,12 @@ export default function EditPage({ params }: EditPageProps) {
         throw new Error(errorData.error || 'Failed to save page')
       }
 
-      // Redirect to the site
-      router.push(`/${username}`)
+        // Redirect to the page
+        if (pageTitle === 'Home') {
+          router.push(`/${username}`)
+        } else {
+          router.push(`/${username}/${encodeURIComponent(pageTitle)}`)
+        }
     } catch (error) {
       console.error('Error saving page:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
@@ -231,8 +243,8 @@ export default function EditPage({ params }: EditPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">Edit Page</h1>
-              <p className="text-sm text-gray-600">{username}.localhost:3000</p>
+              <h1 className="text-xl font-semibold text-gray-900">Edit {pageTitle} Page</h1>
+              <p className="text-sm text-gray-600">{username}.localhost:3000/{pageTitle === 'Home' ? '' : pageTitle}</p>
             </div>
             <div className="flex items-center space-x-4">
               <button

@@ -26,8 +26,28 @@ export default async function UserPage({ params }: PageProps) {
   }
 
   try {
-    // Fetch page content from MediaWiki
-    const content = await fetchPage(page, site.wikiUrl)
+    // First try to get content from local database
+    let content = ''
+    
+    // Look for the page in local database first
+    const pageRecord = await prisma.page.findFirst({
+      where: {
+        siteId: site.id,
+        title: page,
+        isPublished: true
+      }
+    })
+    
+    if (pageRecord) {
+      content = pageRecord.content || ''
+    } else {
+      // Fallback to MediaWiki
+      try {
+        content = await fetchPage(page, site.wikiUrl)
+      } catch {
+        notFound()
+      }
+    }
     
     if (!content) {
       notFound()
@@ -35,55 +55,10 @@ export default async function UserPage({ params }: PageProps) {
 
     return (
       <div className="min-h-screen bg-white">
-        {/* Header */}
-        <header className="border-b border-gray-200">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
-                <p className="text-gray-600 mt-1">
-                  {site.domain || `${site.subdomain}.${getBaseDomain()}`}
-                </p>
-              </div>
-              <nav className="flex space-x-6">
-                <a
-                  href={`/${username}`}
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  Home
-                </a>
-                <a
-                  href={`/${username}/about`}
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  About
-                </a>
-                <a
-                  href={`/${username}/contact`}
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  Contact
-                </a>
-              </nav>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <article className="prose prose-lg max-w-none">
-            <div dangerouslySetInnerHTML={{ __html: content }} />
-          </article>
+        {/* Main Content - Full Width */}
+        <main className="w-full">
+          <div dangerouslySetInnerHTML={{ __html: content }} />
         </main>
-
-        {/* Footer */}
-        <footer className="border-t border-gray-200 mt-16">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="text-center text-gray-600">
-              <p>© 2024 {site.name}. Built with Website Builder.</p>
-            </div>
-          </div>
-        </footer>
       </div>
     )
   } catch (error) {

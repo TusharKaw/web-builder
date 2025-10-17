@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Save, Eye, Code, Palette, Settings } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { Save, Eye, Code, Palette, Settings, Loader2 } from 'lucide-react'
 
 interface EditPageProps {
   params: Promise<{
@@ -12,12 +13,16 @@ interface EditPageProps {
 
 export default function EditPage({ params }: EditPageProps) {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [username, setUsername] = useState('')
   const [htmlContent, setHtmlContent] = useState('')
   const [cssContent, setCssContent] = useState('')
   const [jsContent, setJsContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'html' | 'css' | 'js'>('html')
+  const [isOwner, setIsOwner] = useState(false)
+  const [isCheckingOwner, setIsCheckingOwner] = useState(true)
+  const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
 
   useEffect(() => {
@@ -27,6 +32,81 @@ export default function EditPage({ params }: EditPageProps) {
     }
     loadParams()
   }, [params])
+
+  useEffect(() => {
+    const checkOwner = async () => {
+      if (status === 'loading') return
+      
+      if (!session) {
+        setIsOwner(false)
+        setIsCheckingOwner(false)
+        return
+      }
+
+      if (username) {
+        try {
+          // Check if the current user owns this site
+          const response = await fetch(`/api/sites/by-subdomain/${username}`)
+          if (response.ok) {
+            const site = await response.json()
+            const isOwnerCheck = session.user?.id === site.userId
+            setIsOwner(isOwnerCheck)
+            
+            // Load existing page content if owner
+            if (isOwnerCheck) {
+              await loadExistingContent(site.id)
+            }
+          } else {
+            setIsOwner(false)
+          }
+        } catch (error) {
+          console.error('Error checking ownership:', error)
+          setIsOwner(false)
+        }
+      }
+      setIsCheckingOwner(false)
+    }
+
+    checkOwner()
+  }, [session, status, username])
+
+  const loadExistingContent = async (siteId: string) => {
+    setIsLoadingContent(true)
+    try {
+      // Try to fetch existing "Home" page content
+      const response = await fetch(`/api/sites/${siteId}/pages`)
+      if (response.ok) {
+        const pages = await response.json()
+        const homePage = pages.find((page: any) => page.title === 'Home')
+        
+        if (homePage && homePage.content) {
+          // Parse the existing HTML content
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(homePage.content, 'text/html')
+          
+          // Extract HTML content (body content)
+          const bodyContent = doc.body.innerHTML
+          setHtmlContent(bodyContent)
+          
+          // Extract CSS content
+          const styleElement = doc.querySelector('style')
+          if (styleElement) {
+            setCssContent(styleElement.textContent || '')
+          }
+          
+          // Extract JS content
+          const scriptElement = doc.querySelector('script')
+          if (scriptElement) {
+            setJsContent(scriptElement.textContent || '')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading existing content:', error)
+    } finally {
+      setIsLoadingContent(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!username) return
@@ -112,6 +192,32 @@ export default function EditPage({ params }: EditPageProps) {
     </script>
 </body>
 </html>`
+  }
+
+  if (isCheckingOwner) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <span className="ml-2 text-gray-600">Checking permissions...</span>
+      </div>
+    )
+  }
+
+  if (!isOwner) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You don't have permission to edit this website.</p>
+          <button
+            onClick={() => router.push(`/${username}`)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Go to Website
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (!username) {
@@ -213,29 +319,40 @@ export default function EditPage({ params }: EditPageProps) {
 
                 {/* Editor */}
                 <div className="p-6">
-                  {activeTab === 'html' && (
-                    <textarea
-                      value={htmlContent}
-                      onChange={(e) => setHtmlContent(e.target.value)}
-                      placeholder="Enter your HTML content here..."
-                      className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  )}
-                  {activeTab === 'css' && (
-                    <textarea
-                      value={cssContent}
-                      onChange={(e) => setCssContent(e.target.value)}
-                      placeholder="Enter your CSS styles here..."
-                      className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  )}
-                  {activeTab === 'js' && (
-                    <textarea
-                      value={jsContent}
-                      onChange={(e) => setJsContent(e.target.value)}
-                      placeholder="Enter your JavaScript code here..."
-                      className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                  {isLoadingContent ? (
+                    <div className="flex items-center justify-center h-96">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                        <p className="text-gray-600">Loading existing content...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {activeTab === 'html' && (
+                        <textarea
+                          value={htmlContent}
+                          onChange={(e) => setHtmlContent(e.target.value)}
+                          placeholder="Enter your HTML content here..."
+                          className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      )}
+                      {activeTab === 'css' && (
+                        <textarea
+                          value={cssContent}
+                          onChange={(e) => setCssContent(e.target.value)}
+                          placeholder="Enter your CSS styles here..."
+                          className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      )}
+                      {activeTab === 'js' && (
+                        <textarea
+                          value={jsContent}
+                          onChange={(e) => setJsContent(e.target.value)}
+                          placeholder="Enter your JavaScript code here..."
+                          className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               </div>

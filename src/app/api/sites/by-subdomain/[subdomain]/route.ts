@@ -18,7 +18,8 @@ export async function GET(
         name: true,
         subdomain: true,
         wikiUrl: true,
-        isActive: true
+        isActive: true,
+        userId: true
       }
     })
 

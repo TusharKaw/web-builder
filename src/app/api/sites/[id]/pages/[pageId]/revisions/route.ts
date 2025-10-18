@@ -40,6 +40,7 @@ export async function GET(
     }
 
     // Get all revisions for this page
+    console.log(`[REVISIONS] Fetching revisions for pageId: ${pageId}`)
     const revisions = await prisma.pageRevision.findMany({
       where: { pageId },
       include: {
@@ -54,6 +55,7 @@ export async function GET(
       orderBy: { createdAt: 'desc' }
     })
 
+    console.log(`[REVISIONS] Found ${revisions.length} revisions`)
     return NextResponse.json(revisions)
   } catch (error) {
     console.error('Error fetching revisions:', error)

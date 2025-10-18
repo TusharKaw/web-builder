@@ -49,10 +49,12 @@ export default function PageProtection({ siteId, pageId }: PageProtectionProps) 
       if (response.ok) {
         const data = await response.json()
         setIsProtected(data.isProtected)
-        // You could show a success message here
+        // Show success message
+        alert(data.message || 'Protection status updated successfully')
       } else {
         const error = await response.json()
-        alert(`Failed to update protection: ${error.error}`)
+        console.error('Protection update error:', error)
+        alert(`Failed to update protection: ${error.error || error.details || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error updating protection:', error)

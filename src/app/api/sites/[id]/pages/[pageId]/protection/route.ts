@@ -62,6 +62,8 @@ export async function PUT(
     const { id: siteId, pageId } = await params
     const { isProtected } = await request.json()
 
+    console.log(`[PROTECTION] Updating protection for pageId: ${pageId}, isProtected: ${isProtected}`)
+
     const session = await getServerSession(authOptions)
 
     if (!session) {
@@ -82,24 +84,28 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Update page protection status
-    const updatedPage = await prisma.page.update({
-      where: { id: pageId },
-      data: { isProtected: Boolean(isProtected) },
-      select: {
-        id: true,
-        title: true,
-        isProtected: true
-      }
-    })
+        // Simple page protection update
+        console.log(`[PROTECTION] Updating protection for pageId: ${pageId}, isProtected: ${isProtected}`)
+        
+        const updatedPage = await prisma.page.update({
+          where: { id: pageId },
+          data: { isProtected: Boolean(isProtected) },
+          select: {
+            id: true,
+            title: true,
+            isProtected: true
+          }
+        })
 
-    return NextResponse.json({
-      isProtected: updatedPage.isProtected,
-      pageTitle: updatedPage.title,
-      message: updatedPage.isProtected 
-        ? 'Page is now protected from editing' 
-        : 'Page is now unprotected and can be edited'
-    })
+        console.log(`[PROTECTION] Page protection updated: ${updatedPage.title} is now ${updatedPage.isProtected ? 'protected' : 'unprotected'}`)
+
+        return NextResponse.json({
+          isProtected: updatedPage.isProtected,
+          pageTitle: updatedPage.title,
+          message: updatedPage.isProtected 
+            ? 'Page is now protected from editing' 
+            : 'Page is now unprotected and can be edited'
+        })
   } catch (error) {
     console.error('Error updating page protection:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

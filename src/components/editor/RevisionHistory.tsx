@@ -34,13 +34,38 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
 
   const fetchRevisions = async () => {
     try {
-      const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/revisions`)
-      if (response.ok) {
-        const data = await response.json()
-        setRevisions(data)
+      console.log(`[REVISION HISTORY] Fetching revisions for siteId: ${siteId}, pageId: ${pageId}`)
+      
+      // Get MediaWiki revisions
+      const mediawikiResponse = await fetch(`/api/sites/${siteId}/pages/${pageId}/mediawiki-revisions`)
+      console.log(`[REVISION HISTORY] MediaWiki response status: ${mediawikiResponse.status}`)
+      
+      if (mediawikiResponse.ok) {
+        const data = await mediawikiResponse.json()
+        console.log(`[REVISION HISTORY] MediaWiki data:`, data)
+        
+        // Convert MediaWiki revisions to our format
+        const allRevisions = (data.mediawikiHistory || []).map((rev: any) => ({
+          id: `mw-${rev.revid}`,
+          content: rev.content,
+          comment: rev.comment,
+          isMinor: rev.minor,
+          createdAt: rev.timestamp,
+          user: {
+            id: rev.userid,
+            name: rev.user,
+            email: rev.user
+          }
+        }))
+        console.log(`[REVISION HISTORY] MediaWiki revisions:`, allRevisions)
+        setRevisions(allRevisions)
+      } else {
+        console.log(`[REVISION HISTORY] MediaWiki failed`)
+        setRevisions([])
       }
     } catch (error) {
       console.error('Error fetching revisions:', error)
+      setRevisions([])
     } finally {
       setLoading(false)
     }
@@ -55,12 +80,18 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
     if (!onRestore) return
 
     try {
-      const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/revisions/${revision.id}`, {
+      // Check if it's a MediaWiki revision
+      const isMediaWikiRevision = revision.id.startsWith('mw-')
+      
+      const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/mediawiki-revisions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'restore',
+          revid: isMediaWikiRevision ? revision.id.replace('mw-', '') : revision.id,
+          content: revision.content,
           comment: `Restored to revision from ${new Date(revision.createdAt).toLocaleString()}`
         })
       })
@@ -71,9 +102,14 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
         setSelectedRevision(null)
         // Refresh revisions
         fetchRevisions()
+        alert('Revision restored successfully!')
+      } else {
+        const error = await response.json()
+        alert(`Failed to restore revision: ${error.error}`)
       }
     } catch (error) {
       console.error('Error restoring revision:', error)
+      alert('Failed to restore revision')
     }
   }
 
@@ -109,7 +145,9 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
       <div className="max-h-96 overflow-y-auto">
         {revisions.length === 0 ? (
           <div className="p-4 text-center text-gray-500">
-            No revisions found
+            <History className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+            <p>No revisions found</p>
+            <p className="text-sm mt-1">Revisions will appear here when you edit this page</p>
           </div>
         ) : (
           <div className="divide-y">

@@ -28,6 +28,8 @@ export default function EditPage({ params }: EditPageProps) {
   const [activeTab, setActiveTab] = useState<'html' | 'css' | 'js' | 'history' | 'files' | 'protection' | 'mediawiki'>('html')
   const [isOwner, setIsOwner] = useState(false)
   const [isCheckingOwner, setIsCheckingOwner] = useState(true)
+  const [canEdit, setCanEdit] = useState(false)
+  const [isProtected, setIsProtected] = useState(false)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [siteId, setSiteId] = useState('')
@@ -48,14 +50,18 @@ export default function EditPage({ params }: EditPageProps) {
   }, [params, searchParams])
 
   useEffect(() => {
-    const checkOwner = async () => {
+    const checkPermissions = async () => {
       if (status === 'loading') return
       
       if (!session) {
+        console.log(`[PERMISSIONS] No session found`)
         setIsOwner(false)
+        setCanEdit(false)
         setIsCheckingOwner(false)
         return
       }
+      
+      console.log(`[PERMISSIONS] Session found:`, { userId: session.user?.id, name: session.user?.name })
 
       if (username) {
         try {
@@ -67,23 +73,54 @@ export default function EditPage({ params }: EditPageProps) {
               setIsOwner(isOwnerCheck)
               setSiteId(site.id)
               
-              // Load existing page content if owner
-              if (isOwnerCheck) {
-                await loadExistingContent(site.id)
+              // Check page protection status
+              const pageResponse = await fetch(`/api/sites/${site.id}/pages`)
+              if (pageResponse.ok) {
+                const pages = await pageResponse.json()
+                const targetPage = pages.find((page: any) => page.title === pageTitle)
+                
+                console.log(`[PERMISSIONS] Site owner: ${isOwnerCheck}, Target page:`, targetPage)
+                
+                if (targetPage) {
+                  setPageId(targetPage.id)
+                  setIsProtected(targetPage.isProtected || false)
+                  
+                  // Can edit if: owner OR (not protected and logged in)
+                  const canEditCheck = isOwnerCheck || (!targetPage.isProtected && session.user?.id)
+                  console.log(`[PERMISSIONS] Page protected: ${targetPage.isProtected}, Can edit: ${canEditCheck}`)
+                  setCanEdit(canEditCheck)
+                  
+                  // Load existing page content if can edit
+                  if (canEditCheck) {
+                    await loadExistingContent(site.id)
+                  }
+                } else {
+                  // New page - can edit if logged in
+                  const canEditNewPage = !!session.user?.id
+                  console.log(`[PERMISSIONS] New page, can edit: ${canEditNewPage}`)
+                  setCanEdit(canEditNewPage)
+                }
+              } else {
+                // No pages found - can edit if logged in
+                const canEditNewPage = !!session.user?.id
+                console.log(`[PERMISSIONS] No pages API response, can edit: ${canEditNewPage}`)
+                setCanEdit(canEditNewPage)
               }
             } else {
               setIsOwner(false)
+              setCanEdit(false)
             }
         } catch (error) {
-          console.error('Error checking ownership:', error)
+          console.error('Error checking permissions:', error)
           setIsOwner(false)
+          setCanEdit(false)
         }
       }
       setIsCheckingOwner(false)
     }
 
-    checkOwner()
-  }, [session, status, username])
+    checkPermissions()
+  }, [session, status, username, pageTitle])
 
   const loadExistingContent = async (siteId: string) => {
     setIsLoadingContent(true)
@@ -111,11 +148,17 @@ export default function EditPage({ params }: EditPageProps) {
             setCssContent(styleElement.textContent || '')
           }
           
-          // Extract JS content
-          const scriptElement = doc.querySelector('script')
-          if (scriptElement) {
-            setJsContent(scriptElement.textContent || '')
-          }
+          // Extract JS content (combine all script tags)
+          const scriptElements = doc.querySelectorAll('script')
+          let jsContent = ''
+          scriptElements.forEach(script => {
+            if (script.textContent) {
+              jsContent += script.textContent + '\n'
+            }
+          })
+          const trimmedJs = jsContent.trim()
+          console.log('Loading JS content:', trimmedJs) // Debug log
+          setJsContent(trimmedJs)
         }
       }
     } catch (error) {
@@ -131,6 +174,7 @@ export default function EditPage({ params }: EditPageProps) {
     setIsLoading(true)
     try {
       // Combine HTML, CSS, and JS into a single page
+      console.log('Saving JS content:', jsContent) // Debug log
       const fullHtml = `
 <!DOCTYPE html>
 <html lang="en">
@@ -224,12 +268,21 @@ export default function EditPage({ params }: EditPageProps) {
     )
   }
 
-  if (!isOwner) {
+  if (!canEdit) {
+    console.log(`[ACCESS DENIED] canEdit: ${canEdit}, isProtected: ${isProtected}, isOwner: ${isOwner}`)
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-4">You don't have permission to edit this website.</p>
+          <p className="text-gray-600 mb-4">
+            {isProtected 
+              ? "This page is protected and can only be edited by the owner."
+              : "You need to be logged in to edit this page."
+            }
+          </p>
+          <div className="text-sm text-gray-500 mb-4">
+            Debug: canEdit={canEdit ? 'true' : 'false'}, isProtected={isProtected ? 'true' : 'false'}, isOwner={isOwner ? 'true' : 'false'}
+          </div>
           <button
             onClick={() => router.push(`/${username}`)}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"

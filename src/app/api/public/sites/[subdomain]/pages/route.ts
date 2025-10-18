@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createPage, updatePage } from '@/lib/mediawiki'
+import { editPageInMediaWiki } from '@/lib/mediawiki-real'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -54,8 +54,8 @@ export async function POST(
       console.log(`[DEBUG] Updating existing page: ${existingPage.id}`)
       // Update existing page
       try {
-        console.log(`[DEBUG] Attempting to update page in MediaWiki: ${site.wikiUrl}`)
-        const wikiUpdated = await updatePage(title, content, site.wikiUrl)
+        console.log(`[DEBUG] Attempting to update page in MediaWiki`)
+        const wikiUpdated = await editPageInMediaWiki(title, content, comment || 'Page updated', isMinor || false)
         console.log(`[DEBUG] MediaWiki update result: ${wikiUpdated}`)
         if (!wikiUpdated) {
           console.warn('Failed to update page in MediaWiki, but continuing with local update')
@@ -80,8 +80,8 @@ export async function POST(
       console.log(`[DEBUG] Creating new page`)
       // Create new page
       try {
-        console.log(`[DEBUG] Attempting to create page in MediaWiki: ${site.wikiUrl}`)
-        const wikiCreated = await createPage(title, content, site.wikiUrl)
+        console.log(`[DEBUG] Attempting to create page in MediaWiki`)
+        const wikiCreated = await editPageInMediaWiki(title, content, comment || 'Page created', isMinor || false)
         console.log(`[DEBUG] MediaWiki creation result: ${wikiCreated}`)
         if (!wikiCreated) {
           console.warn('Failed to create page in MediaWiki, but continuing with local creation')
@@ -103,22 +103,30 @@ export async function POST(
       console.log(`[DEBUG] Page created successfully: ${page.id}`)
     }
 
-    // Create revision if user is logged in
-    if (session?.user?.id) {
-      try {
-        await prisma.pageRevision.create({
-          data: {
-            content,
-            comment: comment || (existingPage ? 'Page updated' : 'Page created'),
-            isMinor: isMinor || false,
-            pageId: page.id,
-            userId: session.user.id
-          }
-        })
-        console.log(`[DEBUG] Revision created for page: ${page.id}`)
-      } catch (revisionError) {
-        console.warn('Failed to create revision:', revisionError)
+    // Create revision (always create a revision for tracking)
+    try {
+      // If user is logged in, use their ID, otherwise use the site owner's ID
+      const revisionUserId = session?.user?.id || site.userId
+      console.log(`[DEBUG] Creating revision with userId: ${revisionUserId}, session: ${!!session}`)
+      
+      if (!revisionUserId) {
+        console.error('[DEBUG] No user ID available for revision creation')
+        throw new Error('No user ID available for revision creation')
       }
+      
+      const revision = await prisma.pageRevision.create({
+        data: {
+          content,
+          comment: comment || (existingPage ? 'Page updated' : 'Page created'),
+          isMinor: isMinor || false,
+          pageId: page.id,
+          userId: revisionUserId
+        }
+      })
+      console.log(`[DEBUG] Revision created successfully: ${revision.id}`)
+    } catch (revisionError) {
+      console.error('Failed to create revision:', revisionError)
+      console.error('Revision error details:', revisionError)
     }
 
     console.log(`[DEBUG] Page saved successfully: ${page.id}`)

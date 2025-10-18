@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Upload, X, Image, File, Check } from 'lucide-react'
 
 interface FileUploadProps {
@@ -28,7 +28,27 @@ export default function FileUpload({ siteId, pageId, onFileUploaded }: FileUploa
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    loadFiles()
+  }, [siteId, pageId])
+
+  const loadFiles = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/mediawiki-files`)
+      if (response.ok) {
+        const mediawikiFiles = await response.json()
+        setFiles(mediawikiFiles || [])
+      }
+    } catch (error) {
+      console.error('Error loading files:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleFileSelect = async (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) return
@@ -53,18 +73,27 @@ export default function FileUpload({ siteId, pageId, onFileUploaded }: FileUploa
       try {
         const formData = new FormData()
         formData.append('file', file)
+        formData.append('comment', `Uploaded via website builder`)
 
-        const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/files`, {
+        console.log(`Uploading ${file.name} to MediaWiki...`)
+
+        const response = await fetch(`/api/sites/${siteId}/pages/${pageId}/mediawiki-files`, {
           method: 'POST',
           body: formData
         })
 
         if (response.ok) {
-          const uploadedFile = await response.json()
-          setFiles(prev => [uploadedFile, ...prev])
-          onFileUploaded?.(uploadedFile)
+          const result = await response.json()
+          console.log('Upload successful:', result)
+          
+          // Refresh the file list
+          await loadFiles()
+          onFileUploaded?.(result)
+          
+          alert(`File ${file.name} uploaded successfully to MediaWiki!`)
         } else {
           const error = await response.json()
+          console.error('Upload failed:', error)
           alert(`Failed to upload ${file.name}: ${error.error}`)
         }
       } catch (error) {
@@ -157,38 +186,59 @@ export default function FileUpload({ siteId, pageId, onFileUploaded }: FileUploa
           />
         </div>
 
-        {/* Uploaded Files */}
-        {files.length > 0 && (
+        {/* MediaWiki Files */}
+        {loading ? (
+          <div className="mt-4 text-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-sm text-gray-600 mt-2">Loading files from MediaWiki...</p>
+          </div>
+        ) : files.length > 0 ? (
           <div className="mt-4">
-            <h4 className="font-medium text-gray-900 mb-2">Uploaded Files</h4>
+            <h4 className="font-medium text-gray-900 mb-2">MediaWiki Files</h4>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {files.map((file) => (
-                <div key={file.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+              {files.map((file, index) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
                   <div className="flex items-center space-x-2">
-                    {getFileIcon(file.mimeType)}
+                    {getFileIcon(file.mime || 'image/jpeg')}
                     <div>
-                      <p className="text-sm font-medium">{file.originalName}</p>
-                      <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                      <p className="text-sm font-medium">{file.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {file.size ? formatFileSize(file.size) : 'MediaWiki file'}
+                      </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => copyToClipboard(`![${file.originalName}](${file.path})`)}
+                      onClick={() => copyToClipboard(`[[File:${file.title}]]`)}
                       className="text-xs text-blue-600 hover:text-blue-800"
                     >
-                      Copy Markdown
+                      Copy Wiki Link
                     </button>
                     <button
-                      onClick={() => copyToClipboard(`<img src="${file.path}" alt="${file.originalName}" />`)}
+                      onClick={() => copyToClipboard(`<img src="${file.url}" alt="${file.title}" />`)}
                       className="text-xs text-green-600 hover:text-green-800"
                     >
                       Copy HTML
                     </button>
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-purple-600 hover:text-purple-800"
+                    >
+                      View
+                    </a>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        ) : (
+          <div className="mt-4 text-center py-4 text-gray-500">
+            <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+            <p>No files uploaded to MediaWiki yet</p>
+            <p className="text-sm">Upload files to use them in your pages</p>
           </div>
         )}
       </div>

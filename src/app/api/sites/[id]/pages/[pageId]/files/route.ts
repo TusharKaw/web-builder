@@ -61,10 +61,12 @@ export async function POST(
 ) {
   try {
     const { id: siteId, pageId } = await params
+    console.log(`[FILE UPLOAD] Starting upload for siteId: ${siteId}, pageId: ${pageId}`)
 
     const session = await getServerSession(authOptions)
 
     if (!session) {
+      console.log('[FILE UPLOAD] No session found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -85,7 +87,10 @@ export async function POST(
     const formData = await request.formData()
     const file = formData.get('file') as File
 
+    console.log(`[FILE UPLOAD] File received: ${file?.name}, size: ${file?.size}`)
+
     if (!file) {
+      console.log('[FILE UPLOAD] No file provided')
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
@@ -107,36 +112,55 @@ export async function POST(
     
     // Create upload directory
     const uploadDir = join(process.cwd(), 'public', 'uploads', siteId, pageId)
-    await mkdir(uploadDir, { recursive: true })
+    console.log(`[FILE UPLOAD] Creating directory: ${uploadDir}`)
+    try {
+      await mkdir(uploadDir, { recursive: true })
+      console.log(`[FILE UPLOAD] Directory created successfully`)
+    } catch (error) {
+      console.error('[FILE UPLOAD] Error creating upload directory:', error)
+      return NextResponse.json({ error: 'Failed to create upload directory' }, { status: 500 })
+    }
 
     // Save file
     const filePath = join(uploadDir, uniqueFilename)
+    console.log(`[FILE UPLOAD] Saving file to: ${filePath}`)
     const bytes = await file.arrayBuffer()
-    await writeFile(filePath, Buffer.from(bytes))
+    try {
+      await writeFile(filePath, Buffer.from(bytes))
+      console.log(`[FILE UPLOAD] File saved successfully`)
+    } catch (error) {
+      console.error('[FILE UPLOAD] Error saving file:', error)
+      return NextResponse.json({ error: 'Failed to save file' }, { status: 500 })
+    }
 
     // Save file record to database
-    const fileRecord = await prisma.pageFile.create({
-      data: {
-        filename: uniqueFilename,
-        originalName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        path: `/uploads/${siteId}/${pageId}/${uniqueFilename}`,
-        pageId,
-        userId: session.user.id
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
+    try {
+      const fileRecord = await prisma.pageFile.create({
+        data: {
+          filename: uniqueFilename,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          path: `/uploads/${siteId}/${pageId}/${uniqueFilename}`,
+          pageId,
+          userId: session.user.id
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
           }
         }
-      }
-    })
-
-    return NextResponse.json(fileRecord)
+      })
+      
+      return NextResponse.json(fileRecord)
+    } catch (error) {
+      console.error('Error saving file record to database:', error)
+      return NextResponse.json({ error: 'Failed to save file record' }, { status: 500 })
+    }
   } catch (error) {
     console.error('Error uploading file:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

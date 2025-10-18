@@ -39,6 +39,8 @@ export async function GET(
       }
     })
 
+    console.log(`[PAGES API] Found ${pages.length} pages for site ${id}:`, pages.map(p => ({ id: p.id, title: p.title, isProtected: p.isProtected })))
+
     return NextResponse.json(pages)
   } catch (error) {
     console.error('Error fetching pages:', error)

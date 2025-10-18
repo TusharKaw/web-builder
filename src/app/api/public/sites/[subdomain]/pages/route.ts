@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createPage, updatePage } from '@/lib/mediawiki'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function POST(
   request: NextRequest,
@@ -8,7 +10,10 @@ export async function POST(
 ) {
   try {
     const { subdomain } = await params
-    const { title, content, isPublished = true } = await request.json()
+    const { title, content, isPublished = true, comment, isMinor = false } = await request.json()
+    
+    // Get session for revision tracking
+    const session = await getServerSession(authOptions)
 
     console.log(`[DEBUG] Saving page for subdomain: ${subdomain}`)
     console.log(`[DEBUG] Title: ${title}, Content length: ${content?.length}`)
@@ -96,6 +101,24 @@ export async function POST(
         }
       })
       console.log(`[DEBUG] Page created successfully: ${page.id}`)
+    }
+
+    // Create revision if user is logged in
+    if (session?.user?.id) {
+      try {
+        await prisma.pageRevision.create({
+          data: {
+            content,
+            comment: comment || (existingPage ? 'Page updated' : 'Page created'),
+            isMinor: isMinor || false,
+            pageId: page.id,
+            userId: session.user.id
+          }
+        })
+        console.log(`[DEBUG] Revision created for page: ${page.id}`)
+      } catch (revisionError) {
+        console.warn('Failed to create revision:', revisionError)
+      }
     }
 
     console.log(`[DEBUG] Page saved successfully: ${page.id}`)

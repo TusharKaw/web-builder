@@ -47,9 +47,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  sites    Site[]
+  accounts  Account[]
+  sessions  Session[]
+  sites     Site[]
+  revisions PageRevision[]
+  files     PageFile[]
 }
 
 model VerificationToken {
@@ -83,11 +85,47 @@ model Page {
   slug        String
   content     String?
   isPublished Boolean  @default(false)
+  isProtected Boolean  @default(false) // Page protection like MediaWiki
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   siteId String
   site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
+  revisions PageRevision[]
+  files     PageFile[]
+
   @@unique([siteId, slug])
+}
+
+model PageRevision {
+  id          String   @id @default(cuid())
+  content     String
+  comment     String?  // Edit summary like MediaWiki
+  isMinor     Boolean  @default(false) // Minor edit flag
+  createdAt   DateTime @default(now())
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PageFile {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  path        String   // File storage path
+  createdAt   DateTime @default(now())
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, filename])
 }

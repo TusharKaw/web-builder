@@ -3,7 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
-import { Save, Eye, Code, Palette, Settings, Loader2 } from 'lucide-react'
+import { Save, Eye, Code, Palette, Settings, Loader2, History, Upload, Shield, Database } from 'lucide-react'
+import RevisionHistory from '@/components/editor/RevisionHistory'
+import FileUpload from '@/components/editor/FileUpload'
+import PageProtection from '@/components/editor/PageProtection'
+import MediaWikiDashboard from '@/components/editor/MediaWikiDashboard'
 
 interface EditPageProps {
   params: Promise<{
@@ -21,11 +25,13 @@ export default function EditPage({ params }: EditPageProps) {
   const [cssContent, setCssContent] = useState('')
   const [jsContent, setJsContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'html' | 'css' | 'js'>('html')
+  const [activeTab, setActiveTab] = useState<'html' | 'css' | 'js' | 'history' | 'files' | 'protection' | 'mediawiki'>('html')
   const [isOwner, setIsOwner] = useState(false)
   const [isCheckingOwner, setIsCheckingOwner] = useState(true)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
+  const [siteId, setSiteId] = useState('')
+  const [pageId, setPageId] = useState('')
 
   useEffect(() => {
     const loadParams = async () => {
@@ -53,20 +59,21 @@ export default function EditPage({ params }: EditPageProps) {
 
       if (username) {
         try {
-          // Check if the current user owns this site
-          const response = await fetch(`/api/sites/by-subdomain/${username}`)
-          if (response.ok) {
-            const site = await response.json()
-            const isOwnerCheck = session.user?.id === site.userId
-            setIsOwner(isOwnerCheck)
-            
-            // Load existing page content if owner
-            if (isOwnerCheck) {
-              await loadExistingContent(site.id)
+            // Check if the current user owns this site
+            const response = await fetch(`/api/sites/by-subdomain/${username}`)
+            if (response.ok) {
+              const site = await response.json()
+              const isOwnerCheck = session.user?.id === site.userId
+              setIsOwner(isOwnerCheck)
+              setSiteId(site.id)
+              
+              // Load existing page content if owner
+              if (isOwnerCheck) {
+                await loadExistingContent(site.id)
+              }
+            } else {
+              setIsOwner(false)
             }
-          } else {
-            setIsOwner(false)
-          }
         } catch (error) {
           console.error('Error checking ownership:', error)
           setIsOwner(false)
@@ -88,6 +95,8 @@ export default function EditPage({ params }: EditPageProps) {
         const targetPage = pages.find((page: any) => page.title === pageTitle)
         
         if (targetPage && targetPage.content) {
+          setPageId(targetPage.id)
+          
           // Parse the existing HTML content
           const parser = new DOMParser()
           const doc = parser.parseFromString(targetPage.content, 'text/html')
@@ -326,6 +335,50 @@ export default function EditPage({ params }: EditPageProps) {
                       <Settings className="w-4 h-4 inline mr-2" />
                       JavaScript
                     </button>
+                    <button
+                      onClick={() => setActiveTab('history')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'history'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <History className="w-4 h-4 inline mr-2" />
+                      History
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('files')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'files'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <Upload className="w-4 h-4 inline mr-2" />
+                      Files
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('protection')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'protection'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <Shield className="w-4 h-4 inline mr-2" />
+                      Protection
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('mediawiki')}
+                      className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                        activeTab === 'mediawiki'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <Database className="w-4 h-4 inline mr-2" />
+                      MediaWiki
+                    </button>
                   </nav>
                 </div>
 
@@ -362,6 +415,47 @@ export default function EditPage({ params }: EditPageProps) {
                           onChange={(e) => setJsContent(e.target.value)}
                           placeholder="Enter your JavaScript code here..."
                           className="w-full h-96 p-4 border border-gray-300 rounded-md font-mono text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      )}
+                      {activeTab === 'history' && (
+                        <RevisionHistory 
+                          siteId={siteId} 
+                          pageId={pageId} 
+                          onRestore={(content) => {
+                            const parser = new DOMParser()
+                            const doc = parser.parseFromString(content, 'text/html')
+                            setHtmlContent(doc.body.innerHTML)
+                            const styleElement = doc.querySelector('style')
+                            if (styleElement) {
+                              setCssContent(styleElement.textContent || '')
+                            }
+                            const scriptElement = doc.querySelector('script')
+                            if (scriptElement) {
+                              setJsContent(scriptElement.textContent || '')
+                            }
+                          }}
+                        />
+                      )}
+                      {activeTab === 'files' && (
+                        <FileUpload 
+                          siteId={siteId} 
+                          pageId={pageId} 
+                          onFileUploaded={(file) => {
+                            console.log('File uploaded:', file)
+                          }}
+                        />
+                      )}
+                      {activeTab === 'protection' && (
+                        <PageProtection 
+                          siteId={siteId} 
+                          pageId={pageId} 
+                        />
+                      )}
+                      {activeTab === 'mediawiki' && (
+                        <MediaWikiDashboard 
+                          siteId={siteId} 
+                          pageId={pageId} 
+                          pageTitle={pageTitle}
                         />
                       )}
                     </>

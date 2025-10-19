@@ -43,43 +43,43 @@ export async function GET(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    // Get revisions from MediaWiki, fallback to local
-    try {
-      console.log(`[MEDIAWIKI REVISIONS] Fetching history for page: ${page.title}`)
-      
-      const mediawikiHistory = await getPageHistoryFromMediaWiki(page.title, limit)
-      console.log(`[MEDIAWIKI REVISIONS] Found ${mediawikiHistory.length} MediaWiki revisions`)
-      
-      // If no MediaWiki revisions, get local revisions
-      let localRevisions = []
-      if (mediawikiHistory.length === 0) {
-        console.log(`[MEDIAWIKI REVISIONS] No MediaWiki revisions, getting local revisions`)
-        localRevisions = await prisma.pageRevision.findMany({
-          where: { pageId },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-          take: limit
-        })
-        console.log(`[MEDIAWIKI REVISIONS] Found ${localRevisions.length} local revisions`)
-      }
-      
-      return NextResponse.json({
-        mediawikiHistory: mediawikiHistory || [],
-        localRevisions: localRevisions || [],
-        totalRevisions: (mediawikiHistory?.length || 0) + (localRevisions?.length || 0)
-      })
-    } catch (error) {
-      console.error('Error getting MediaWiki revisions:', error)
-      return NextResponse.json({ error: 'Failed to get revisions' }, { status: 500 })
-    }
+        // Get revisions from MediaWiki, fallback to local
+        try {
+          console.log(`[MEDIAWIKI REVISIONS] Fetching history for page: ${page.title}`)
+
+          const mediawikiHistory = await getPageHistoryFromMediaWiki(page.title, limit)
+          console.log(`[MEDIAWIKI REVISIONS] Found ${mediawikiHistory.length} MediaWiki revisions`)
+
+          // If no MediaWiki revisions, get local revisions
+          let localRevisions = []
+          if (mediawikiHistory.length === 0) {
+            console.log(`[MEDIAWIKI REVISIONS] No MediaWiki revisions, getting local revisions`)
+            localRevisions = await prisma.pageRevision.findMany({
+              where: { pageId },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'desc' },
+              take: limit
+            })
+            console.log(`[MEDIAWIKI REVISIONS] Found ${localRevisions.length} local revisions`)
+          }
+
+          return NextResponse.json({
+            mediawikiHistory: mediawikiHistory || [],
+            localRevisions: localRevisions || [],
+            totalRevisions: (mediawikiHistory?.length || 0) + (localRevisions?.length || 0)
+          })
+        } catch (error) {
+          console.error('Error getting MediaWiki revisions:', error)
+          return NextResponse.json({ error: 'Failed to get revisions' }, { status: 500 })
+        }
   } catch (error) {
     console.error('Error in MediaWiki revisions API:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -123,16 +123,36 @@ export async function POST(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    // Restore revision from MediaWiki
+    // Restore revision from local database or MediaWiki
     try {
       if (action === 'restore' && revid) {
-        console.log(`[MEDIAWIKI RESTORE] Restoring revision: ${revid}`)
+        console.log(`[RESTORE] Restoring revision: ${revid}`)
         
-        // Get revision content from MediaWiki
-        const revisionContent = await getRevisionContentFromMediaWiki(parseInt(revid))
+        let revisionContent = ''
         
-        if (!revisionContent) {
-          return NextResponse.json({ error: 'Revision not found in MediaWiki' }, { status: 404 })
+        // Check if it's a MediaWiki revision
+        if (revid.toString().startsWith('mw-')) {
+          const mediawikiRevId = parseInt(revid.toString().replace('mw-', ''))
+          console.log(`[RESTORE] MediaWiki revision ID: ${mediawikiRevId}`)
+          
+          revisionContent = await getRevisionContentFromMediaWiki(mediawikiRevId)
+          
+          if (!revisionContent) {
+            return NextResponse.json({ error: 'Revision not found in MediaWiki' }, { status: 404 })
+          }
+        } else {
+          // Local revision
+          console.log(`[RESTORE] Local revision ID: ${revid}`)
+          
+          const revision = await prisma.pageRevision.findUnique({
+            where: { id: revid }
+          })
+          
+          if (!revision) {
+            return NextResponse.json({ error: 'Revision not found in local database' }, { status: 404 })
+          }
+          
+          revisionContent = revision.content
         }
 
         // Update page content in local database
@@ -144,13 +164,13 @@ export async function POST(
         return NextResponse.json({
           success: true,
           content: revisionContent,
-          message: `Restored to MediaWiki revision ${revid}`
+          message: `Restored to revision ${revid}`
         })
       } else {
         return NextResponse.json({ error: 'Invalid action or missing revision ID' }, { status: 400 })
       }
     } catch (error) {
-      console.error('Error restoring MediaWiki revision:', error)
+      console.error('Error restoring revision:', error)
       return NextResponse.json({ error: 'Failed to restore revision' }, { status: 500 })
     }
   } catch (error) {

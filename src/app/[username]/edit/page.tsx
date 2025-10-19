@@ -34,6 +34,8 @@ export default function EditPage({ params }: EditPageProps) {
   const [previewMode, setPreviewMode] = useState(false)
   const [siteId, setSiteId] = useState('')
   const [pageId, setPageId] = useState('')
+  const [editSummary, setEditSummary] = useState('')
+  const [isMinorEdit, setIsMinorEdit] = useState(false)
 
   useEffect(() => {
     const loadParams = async () => {
@@ -85,14 +87,18 @@ export default function EditPage({ params }: EditPageProps) {
                   setPageId(targetPage.id)
                   setIsProtected(targetPage.isProtected || false)
                   
-                  // Can edit if: owner OR (not protected and logged in)
-                  const canEditCheck = isOwnerCheck || (!targetPage.isProtected && session.user?.id)
+                  // Use MediaWiki-style protection: owner can always edit, others need to be logged in for unprotected pages
+                  const canEditCheck = isOwnerCheck || (!targetPage.isProtected && session?.user?.id)
                   console.log(`[PERMISSIONS] Page protected: ${targetPage.isProtected}, Can edit: ${canEditCheck}`)
+                  console.log(`[PERMISSIONS] isOwnerCheck: ${isOwnerCheck}, isProtected: ${targetPage.isProtected}, hasSession: ${!!session?.user?.id}`)
                   setCanEdit(canEditCheck)
                   
                   // Load existing page content if can edit
                   if (canEditCheck) {
+                    console.log(`[PERMISSIONS] Loading content for user who can edit`)
                     await loadExistingContent(site.id)
+                  } else {
+                    console.log(`[PERMISSIONS] Not loading content - user cannot edit`)
                   }
                 } else {
                   // New page - can edit if logged in
@@ -124,14 +130,59 @@ export default function EditPage({ params }: EditPageProps) {
 
   const loadExistingContent = async (siteId: string) => {
     setIsLoadingContent(true)
+    console.log(`[LOAD CONTENT] Loading content for siteId: ${siteId}, pageTitle: ${pageTitle}`)
     try {
-      // Try to fetch existing page content
+      // First try MediaWiki
+      console.log(`[LOAD CONTENT] Trying MediaWiki first`)
+      const mediawikiResponse = await fetch(`/api/sites/${siteId}/pages/${pageId}/mediawiki-revisions`)
+      if (mediawikiResponse.ok) {
+        const mediawikiData = await mediawikiResponse.json()
+        if (mediawikiData.mediawikiHistory && mediawikiData.mediawikiHistory.length > 0) {
+          const latestRevision = mediawikiData.mediawikiHistory[0]
+          console.log(`[LOAD CONTENT] Found MediaWiki content`)
+          
+          // Parse MediaWiki content
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(latestRevision.content, 'text/html')
+          
+          // Extract HTML content (body content)
+          const bodyContent = doc.body.innerHTML
+          setHtmlContent(bodyContent)
+          
+          // Extract CSS content
+          const styleElement = doc.querySelector('style')
+          if (styleElement) {
+            setCssContent(styleElement.textContent || '')
+          }
+          
+          // Extract JS content (combine all script tags)
+          const scriptElements = doc.querySelectorAll('script')
+          let jsContent = ''
+          scriptElements.forEach(script => {
+            if (script.textContent) {
+              jsContent += script.textContent + '\n'
+            }
+          })
+          const trimmedJs = jsContent.trim()
+          console.log('Loading JS content from MediaWiki:', trimmedJs)
+          setJsContent(trimmedJs)
+          console.log(`[LOAD CONTENT] MediaWiki content loaded successfully`)
+          return
+        }
+      }
+      
+      // Fallback to local database
+      console.log(`[LOAD CONTENT] Falling back to local database`)
       const response = await fetch(`/api/sites/${siteId}/pages`)
+      console.log(`[LOAD CONTENT] Pages API response: ${response.status}`)
       if (response.ok) {
         const pages = await response.json()
+        console.log(`[LOAD CONTENT] Found ${pages.length} pages`)
         const targetPage = pages.find((page: any) => page.title === pageTitle)
+        console.log(`[LOAD CONTENT] Target page found: ${!!targetPage}`)
         
         if (targetPage && targetPage.content) {
+          console.log(`[LOAD CONTENT] Loading content from local page: ${targetPage.id}`)
           setPageId(targetPage.id)
           
           // Parse the existing HTML content
@@ -157,9 +208,14 @@ export default function EditPage({ params }: EditPageProps) {
             }
           })
           const trimmedJs = jsContent.trim()
-          console.log('Loading JS content:', trimmedJs) // Debug log
+          console.log('Loading JS content from local:', trimmedJs)
           setJsContent(trimmedJs)
+          console.log(`[LOAD CONTENT] Local content loaded successfully`)
+        } else {
+          console.log(`[LOAD CONTENT] No content found for page`)
         }
+      } else {
+        console.log(`[LOAD CONTENT] Pages API failed: ${response.status}`)
       }
     } catch (error) {
       console.error('Error loading existing content:', error)
@@ -209,7 +265,9 @@ export default function EditPage({ params }: EditPageProps) {
         body: JSON.stringify({
           title: pageTitle,
           content: fullHtml,
-          isPublished: true
+          isPublished: true,
+          comment: editSummary,
+          isMinor: isMinorEdit
         })
       })
 
@@ -332,6 +390,40 @@ export default function EditPage({ params }: EditPageProps) {
           </div>
         </div>
       </header>
+
+      {/* Edit Summary Section */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-7xl mx-auto">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">Edit Summary</h3>
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="editSummary" className="block text-sm font-medium text-gray-700 mb-1">
+                Summary (optional)
+              </label>
+              <input
+                type="text"
+                id="editSummary"
+                value={editSummary}
+                onChange={(e) => setEditSummary(e.target.value)}
+                placeholder="Briefly describe your changes..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isMinorEdit"
+                checked={isMinorEdit}
+                onChange={(e) => setIsMinorEdit(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isMinorEdit" className="ml-2 block text-sm text-gray-700">
+                This is a minor edit
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {previewMode ? (

@@ -47,6 +47,25 @@ export async function POST(
       }
     })
 
+    // Check page protection if page exists
+    if (existingPage && existingPage.isProtected) {
+      console.log(`[DEBUG] Page is protected, checking permissions`)
+      
+      // Check if user is logged in
+      if (!session) {
+        console.log(`[DEBUG] No session for protected page`)
+        return NextResponse.json({ error: 'This page is protected. You must be logged in to edit it.' }, { status: 401 })
+      }
+      
+      // Check if user is the site owner
+      if (session.user?.id !== site.userId) {
+        console.log(`[DEBUG] User ${session.user?.id} is not the owner ${site.userId} of protected page`)
+        return NextResponse.json({ error: 'This page is protected and can only be edited by the site owner.' }, { status: 403 })
+      }
+      
+      console.log(`[DEBUG] Owner editing protected page - allowed`)
+    }
+
     console.log(`[DEBUG] Existing page found: ${!!existingPage}`)
 
     let page

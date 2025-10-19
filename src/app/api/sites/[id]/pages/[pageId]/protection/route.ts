@@ -84,9 +84,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-        // Simple page protection update
+        // Update page protection in MediaWiki and local database
         console.log(`[PROTECTION] Updating protection for pageId: ${pageId}, isProtected: ${isProtected}`)
-        
+
+        // Update in local database
         const updatedPage = await prisma.page.update({
           where: { id: pageId },
           data: { isProtected: Boolean(isProtected) },
@@ -102,8 +103,8 @@ export async function PUT(
         return NextResponse.json({
           isProtected: updatedPage.isProtected,
           pageTitle: updatedPage.title,
-          message: updatedPage.isProtected 
-            ? 'Page is now protected from editing' 
+          message: updatedPage.isProtected
+            ? 'Page is now protected from editing'
             : 'Page is now unprotected and can be edited'
         })
   } catch (error) {

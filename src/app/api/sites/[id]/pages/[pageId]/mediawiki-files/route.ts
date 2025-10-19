@@ -42,37 +42,57 @@ export async function GET(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 })
     }
 
-    // Get files from MediaWiki, fallback to local
-    try {
-      console.log(`[MEDIAWIKI FILES] Getting files for page: ${page.title}`)
-      const mediawikiFiles = await getFilesFromMediaWiki(page.title)
-      console.log(`[MEDIAWIKI FILES] Found ${mediawikiFiles.length} files from MediaWiki`)
-      
-      // If no MediaWiki files, get local files
-      if (mediawikiFiles.length === 0) {
-        console.log(`[MEDIAWIKI FILES] No MediaWiki files, getting local files`)
-        const localFiles = await prisma.pageFile.findMany({
-          where: { pageId },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' }
-        })
-        console.log(`[MEDIAWIKI FILES] Found ${localFiles.length} local files`)
-        return NextResponse.json(localFiles)
-      }
-      
-      return NextResponse.json(mediawikiFiles)
-    } catch (error) {
-      console.error('Error fetching MediaWiki files:', error)
-      return NextResponse.json([])
-    }
+        // Get files from MediaWiki, fallback to local
+        try {
+          console.log(`[MEDIAWIKI FILES] Getting files for page: ${page.title}`)
+          const mediawikiFiles = await getFilesFromMediaWiki(page.title)
+          console.log(`[MEDIAWIKI FILES] Found ${mediawikiFiles.length} files from MediaWiki`)
+
+          // If no MediaWiki files, get local files
+          if (mediawikiFiles.length === 0) {
+            console.log(`[MEDIAWIKI FILES] No MediaWiki files, getting local files`)
+            const localFiles = await prisma.pageFile.findMany({
+              where: { pageId },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'desc' }
+            })
+            console.log(`[MEDIAWIKI FILES] Found ${localFiles.length} local files`)
+            return NextResponse.json(localFiles)
+          }
+
+          return NextResponse.json(mediawikiFiles)
+        } catch (error) {
+          console.error('Error fetching MediaWiki files:', error)
+          // Fallback to local files on error
+          try {
+            const localFiles = await prisma.pageFile.findMany({
+              where: { pageId },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              },
+              orderBy: { createdAt: 'desc' }
+            })
+            console.log(`[MEDIAWIKI FILES] Error occurred, returning ${localFiles.length} local files`)
+            return NextResponse.json(localFiles)
+          } catch (fallbackError) {
+            console.error('Error fetching local files:', fallbackError)
+            return NextResponse.json([])
+          }
+        }
   } catch (error) {
     console.error('Error in MediaWiki files API:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -132,65 +152,64 @@ export async function POST(
     const bytes = await file.arrayBuffer()
     const fileBuffer = Buffer.from(bytes)
 
-    // Upload file to MediaWiki, fallback to local
-    try {
-      console.log(`[MEDIAWIKI UPLOAD] Uploading file: ${file.name} to MediaWiki`)
-      
-      const uploadSuccess = await uploadFileToMediaWiki(file.name, fileBuffer, comment)
-      
-      if (!uploadSuccess) {
-        console.log(`[MEDIAWIKI UPLOAD] MediaWiki upload failed, using local storage`)
-        
-        // Fallback to local file storage
-        const fileExtension = file.name.split('.').pop()
-        const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`
-        
-        // Create upload directory
-        const uploadDir = join(process.cwd(), 'public', 'uploads', siteId, pageId)
-        await mkdir(uploadDir, { recursive: true })
-        
-        // Save file
-        const filePath = join(uploadDir, uniqueFilename)
-        await writeFile(filePath, fileBuffer)
-        
-        // Save file record to database
-        const fileRecord = await prisma.pageFile.create({
-          data: {
-            filename: uniqueFilename,
-            originalName: file.name,
-            mimeType: file.type,
-            size: file.size,
-            path: `/uploads/${siteId}/${pageId}/${uniqueFilename}`,
-            pageId,
-            userId: session.user.id
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
+        // Upload file to MediaWiki, fallback to local
+        try {
+          console.log(`[MEDIAWIKI UPLOAD] Uploading file: ${file.name} to MediaWiki`)
+
+          const uploadSuccess = await uploadFileToMediaWiki(file.name, fileBuffer, comment)
+
+          if (uploadSuccess) {
+            console.log(`[MEDIAWIKI UPLOAD] File uploaded successfully: ${file.name}`)
+            return NextResponse.json({
+              success: true,
+              filename: file.name,
+              message: 'File uploaded to MediaWiki successfully'
+            })
+          } else {
+            console.log(`[MEDIAWIKI UPLOAD] MediaWiki upload failed, using local storage`)
+
+            // Fallback to local file storage
+            const fileExtension = file.name.split('.').pop()
+            const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`
+
+            // Create upload directory
+            const uploadDir = join(process.cwd(), 'public', 'uploads', siteId, pageId)
+            await mkdir(uploadDir, { recursive: true })
+
+            // Save file
+            const filePath = join(uploadDir, uniqueFilename)
+            await writeFile(filePath, fileBuffer)
+
+            // Save file record to database
+            const fileRecord = await prisma.pageFile.create({
+              data: {
+                filename: uniqueFilename,
+                originalName: file.name,
+                mimeType: file.type,
+                size: file.size,
+                path: `/uploads/${siteId}/${pageId}/${uniqueFilename}`,
+                pageId,
+                userId: session.user.id
+              },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
               }
-            }
+            })
+
+            console.log(`[LOCAL UPLOAD] File uploaded successfully: ${file.name}`)
+            return NextResponse.json(fileRecord)
           }
-        })
-        
-        console.log(`[LOCAL UPLOAD] File uploaded successfully: ${file.name}`)
-        return NextResponse.json(fileRecord)
-      }
-      
-      console.log(`[MEDIAWIKI UPLOAD] File uploaded successfully: ${file.name}`)
-      
-      return NextResponse.json({
-        success: true,
-        filename: file.name,
-        message: 'File uploaded to MediaWiki successfully'
-      })
-      
-    } catch (uploadError) {
-      console.error(`[UPLOAD] Upload error for ${file.name}:`, uploadError)
-      return NextResponse.json({ error: `Failed to upload file: ${uploadError.message}` }, { status: 500 })
-    }
+
+        } catch (uploadError) {
+          console.error(`[UPLOAD] Upload error for ${file.name}:`, uploadError)
+          return NextResponse.json({ error: `Failed to upload file: ${uploadError.message}` }, { status: 500 })
+        }
   } catch (error) {
     console.error('Error uploading file to MediaWiki:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

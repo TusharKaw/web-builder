@@ -44,8 +44,8 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
         const data = await mediawikiResponse.json()
         console.log(`[REVISION HISTORY] MediaWiki data:`, data)
         
-        // Convert MediaWiki revisions to our format
-        const allRevisions = (data.mediawikiHistory || []).map((rev: any) => ({
+        // Convert MediaWiki and local revisions to our format
+        const mediawikiRevisions = (data.mediawikiHistory || []).map((rev: any) => ({
           id: `mw-${rev.revid}`,
           content: rev.content,
           comment: rev.comment,
@@ -57,7 +57,22 @@ export default function RevisionHistory({ siteId, pageId, onRestore }: RevisionH
             email: rev.user
           }
         }))
-        console.log(`[REVISION HISTORY] MediaWiki revisions:`, allRevisions)
+        
+        const localRevisions = (data.localRevisions || []).map((rev: any) => ({
+          id: rev.id,
+          content: rev.content,
+          comment: rev.comment,
+          isMinor: rev.isMinor,
+          createdAt: rev.createdAt,
+          user: {
+            id: rev.user.id,
+            name: rev.user.name,
+            email: rev.user.email
+          }
+        }))
+        
+        const allRevisions = [...mediawikiRevisions, ...localRevisions]
+        console.log(`[REVISION HISTORY] All revisions:`, allRevisions)
         setRevisions(allRevisions)
       } else {
         console.log(`[REVISION HISTORY] MediaWiki failed`)

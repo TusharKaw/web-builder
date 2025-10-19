@@ -201,28 +201,28 @@ export default function FileUpload({ siteId, pageId, onFileUploaded }: FileUploa
                   <div className="flex items-center space-x-2">
                     {getFileIcon(file.mime || 'image/jpeg')}
                     <div>
-                      <p className="text-sm font-medium">{file.title}</p>
+                      <p className="text-sm font-medium">{file.title || file.originalName}</p>
                       <p className="text-xs text-gray-500">
-                        {file.size ? formatFileSize(file.size) : 'MediaWiki file'}
+                        {file.size ? formatFileSize(file.size) : 'File'}
                       </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => copyToClipboard(`[[File:${file.title}]]`)}
+                      onClick={() => copyToClipboard(`[[File:${file.title || file.originalName}]]`)}
                       className="text-xs text-blue-600 hover:text-blue-800"
                     >
                       Copy Wiki Link
                     </button>
                     <button
-                      onClick={() => copyToClipboard(`<img src="${file.url}" alt="${file.title}" />`)}
+                      onClick={() => copyToClipboard(`<img src="${file.path || file.url}" alt="${file.title || file.originalName}" />`)}
                       className="text-xs text-green-600 hover:text-green-800"
                     >
                       Copy HTML
                     </button>
                     <a
-                      href={file.url}
+                      href={file.path || file.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-purple-600 hover:text-purple-800"

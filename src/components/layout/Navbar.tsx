@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { User, LogOut, Settings } from 'lucide-react'
+import WebsiteSearchBar from '@/components/search/WebsiteSearchBar'
 
 export default function Navbar() {
   const { data: session, status } = useSession()
@@ -36,7 +37,25 @@ export default function Navbar() {
             </Link>
           </div>
           
+          {/* Mobile Search Bar */}
+          <div className="md:hidden flex-1 mx-4">
+            <WebsiteSearchBar />
+          </div>
+          
           <div className="flex items-center space-x-4">
+            {/* Search Bar */}
+            <div className="hidden md:block w-80">
+              <WebsiteSearchBar />
+            </div>
+            
+            {/* Search Page Link */}
+            <Link
+              href="/search"
+              className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Search
+            </Link>
+            
             {session ? (
               <>
                 <Link

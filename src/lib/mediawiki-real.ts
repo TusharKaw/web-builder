@@ -227,3 +227,133 @@ export async function getPageContentFromMediaWiki(pageTitle: string): Promise<st
     return ''
   }
 }
+
+// Search websites using MediaWiki (like Wikipedia)
+export async function searchWebsites(query: string, limit: number = 10): Promise<any[]> {
+  try {
+    console.log(`[MEDIAWIKI] Searching websites for query: ${query}`)
+    
+    // Get all pages and filter them (since text search is disabled)
+    const response = await fetch(`${MEDIAWIKI_API_URL}?action=query&format=json&list=allpages&aplimit=50&origin=*`)
+    const data = await response.json()
+    
+    console.log(`[MEDIAWIKI] All pages response:`, data)
+    
+    const allPages = data?.query?.allpages || []
+    console.log(`[MEDIAWIKI] Found ${allPages.length} total pages`)
+    
+    // Filter pages that match the query
+    const filteredPages = allPages.filter((page: any) => 
+      page.title.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, limit)
+    
+    console.log(`[MEDIAWIKI] Found ${filteredPages.length} matching pages`)
+    
+    return filteredPages.map((page: any) => ({
+      title: page.title,
+      snippet: `Page: ${page.title}`,
+      size: 0,
+      wordcount: 0,
+      timestamp: new Date().toISOString(),
+      url: `http://13.233.126.84/index.php?title=${encodeURIComponent(page.title)}`,
+      type: 'mediawiki'
+    }))
+  } catch (error) {
+    console.error(`[MEDIAWIKI] Error searching websites:`, error)
+    return []
+  }
+}
+
+// Get search suggestions (autocomplete)
+export async function getSearchSuggestions(query: string, limit: number = 5): Promise<string[]> {
+  try {
+    console.log(`[MEDIAWIKI] Getting search suggestions for: ${query}`)
+    
+    // Get all pages and filter them for suggestions
+    const response = await fetch(`${MEDIAWIKI_API_URL}?action=query&format=json&list=allpages&aplimit=50&origin=*`)
+    const data = await response.json()
+    
+    const allPages = data?.query?.allpages || []
+    
+    // Filter pages that start with the query
+    const suggestions = allPages
+      .filter((page: any) => 
+        page.title.toLowerCase().startsWith(query.toLowerCase())
+      )
+      .slice(0, limit)
+      .map((page: any) => page.title)
+    
+    console.log(`[MEDIAWIKI] Found ${suggestions.length} suggestions`)
+    
+    return suggestions
+  } catch (error) {
+    console.error(`[MEDIAWIKI] Error getting search suggestions:`, error)
+    return []
+  }
+}
+
+// Search for user-created websites (subdomains)
+export async function searchUserWebsites(query: string, limit: number = 10): Promise<any[]> {
+  try {
+    console.log(`[MEDIAWIKI] Searching user websites for query: ${query}`)
+    
+    // Get all pages and filter for website-like content
+    const response = await fetch(`${MEDIAWIKI_API_URL}?action=query&format=json&list=allpages&aplimit=50&origin=*`)
+    const data = await response.json()
+    
+    const allPages = data?.query?.allpages || []
+    console.log(`[MEDIAWIKI] Found ${allPages.length} total pages`)
+    
+    // Filter pages that could be websites (exclude system pages)
+    const websitePages = allPages.filter((page: any) => {
+      const title = page.title.toLowerCase()
+      // Exclude system pages and include pages that could be websites
+      return !title.includes('special:') && 
+             !title.includes('user:') && 
+             !title.includes('template:') &&
+             !title.includes('category:') &&
+             !title.includes('file:') &&
+             !title.includes('help:') &&
+             !title.includes('main page') &&
+             title.includes(query.toLowerCase())
+    }).slice(0, limit)
+    
+    console.log(`[MEDIAWIKI] Found ${websitePages.length} website pages`)
+    
+    return websitePages.map((page: any) => ({
+      name: page.title,
+      description: `Website: ${page.title}`,
+      subdomain: page.title.toLowerCase().replace(/\s+/g, ''),
+      logo: null,
+      owner: 'Unknown',
+      created_at: new Date().toISOString(),
+      url: `/${page.title.toLowerCase().replace(/\s+/g, '')}`,
+      type: 'website'
+    }))
+  } catch (error) {
+    console.error(`[MEDIAWIKI] Error searching user websites:`, error)
+    return []
+  }
+}
+
+// Get all websites (for browsing)
+export async function getAllWebsites(limit: number = 50): Promise<any[]> {
+  try {
+    console.log(`[MEDIAWIKI] Getting all websites`)
+    
+    const response = await fetch(`${MEDIAWIKI_API_URL}?action=query&format=json&list=allpages&aplimit=${limit}&origin=*`)
+    const data = await response.json()
+    
+    const websites = data?.query?.allpages || []
+    console.log(`[MEDIAWIKI] Found ${websites.length} websites`)
+    
+    return websites.map((site: any) => ({
+      title: site.title,
+      pageid: site.pageid,
+      url: `http://13.233.126.84/index.php?title=${encodeURIComponent(site.title)}`
+    }))
+  } catch (error) {
+    console.error(`[MEDIAWIKI] Error getting all websites:`, error)
+    return []
+  }
+}

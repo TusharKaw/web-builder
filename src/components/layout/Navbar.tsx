@@ -55,6 +55,12 @@ export default function Navbar() {
             >
               Search
             </Link>
+            <Link
+              href="/recent-changes"
+              className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+            >
+              Recent Changes
+            </Link>
             
             {session ? (
               <>

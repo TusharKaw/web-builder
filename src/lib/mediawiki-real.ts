@@ -357,3 +357,84 @@ export async function getAllWebsites(limit: number = 50): Promise<any[]> {
     return []
   }
 }
+
+// Recent changes (edits/logs) from MediaWiki
+export interface MediaWikiRecentChange {
+  type: string
+  ns?: number
+  title: string
+  revid?: number
+  old_revid?: number
+  rcid?: number
+  timestamp: string
+  user: string
+  comment?: string
+  logtype?: string
+  logaction?: string
+}
+
+export async function getRecentChanges(limit: number = 50): Promise<MediaWikiRecentChange[]> {
+  try {
+    const url = `${MEDIAWIKI_API_URL}?action=query&format=json&list=recentchanges&rcprop=title|timestamp|user|comment|ids|loginfo&rclimit=${limit}&origin=*`
+    const response = await fetch(url)
+    const data = await response.json()
+    const rc = (data?.query?.recentchanges || []) as any[]
+    return rc.map((item: any) => ({
+      type: item.type,
+      ns: item.ns,
+      title: item.title,
+      revid: item.revid,
+      old_revid: item.old_revid,
+      rcid: item.rcid,
+      timestamp: item.timestamp,
+      user: item.user,
+      comment: item.comment,
+      logtype: item.logtype,
+      logaction: item.logaction
+    }))
+  } catch (error) {
+    console.error('[MEDIAWIKI] Error fetching recent changes:', error)
+    return []
+  }
+}
+
+// CreateWiki/ManageWiki logs (new subwikis)
+export interface MediaWikiCreateWikiLog {
+  title: string
+  timestamp: string
+  user: string
+  comment?: string
+  logtype: string
+  action: string
+}
+
+export async function getCreateWikiLogs(limit: number = 50): Promise<MediaWikiCreateWikiLog[]> {
+  try {
+    // Try CreateWiki log type first; fallback to ManageWiki or all logs filtered client-side
+    const tryTypes = ['createwiki', 'managewiki', 'newusers']
+    for (const letype of tryTypes) {
+      try {
+        const url = `${MEDIAWIKI_API_URL}?action=query&format=json&list=logevents&letype=${letype}&leprop=title|timestamp|user|comment|type|action&lelimit=${limit}&origin=*`
+        const resp = await fetch(url)
+        const data = await resp.json()
+        const events = (data?.query?.logevents || []) as any[]
+        if (events.length > 0) {
+          return events.map(ev => ({
+            title: ev.title || '',
+            timestamp: ev.timestamp,
+            user: ev.user,
+            comment: ev.comment,
+            logtype: ev.type,
+            action: ev.action
+          }))
+        }
+      } catch (_e) {
+        // continue to next type
+      }
+    }
+    return []
+  } catch (error) {
+    console.error('[MEDIAWIKI] Error fetching CreateWiki logs:', error)
+    return []
+  }
+}

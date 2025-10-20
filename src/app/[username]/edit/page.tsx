@@ -366,27 +366,36 @@ export default function EditPage({ params }: EditPageProps) {
               <h1 className="text-xl font-semibold text-gray-900">Edit {pageTitle} Page</h1>
               <p className="text-sm text-gray-600">{username}.localhost:3000/{pageTitle === 'Home' ? '' : pageTitle}</p>
             </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setPreviewMode(!previewMode)}
-                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium ${
-                  previewMode 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                {previewMode ? 'Edit' : 'Preview'}
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isLoading}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {isLoading ? 'Saving...' : 'Save & Publish'}
-              </button>
-            </div>
+                <div className="flex items-center space-x-4">
+                  <a
+                    href={`/${username}/visual-edit`}
+                    className="flex items-center px-3 py-2 rounded-md text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    Visual Editor
+                  </a>
+                  <button
+                    onClick={() => setPreviewMode(!previewMode)}
+                    className={`flex items-center px-3 py-2 rounded-md text-sm font-medium ${
+                      previewMode
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    {previewMode ? 'Edit' : 'Preview'}
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isLoading}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? 'Saving...' : 'Save & Publish'}
+                  </button>
+                </div>
           </div>
         </div>
       </header>
